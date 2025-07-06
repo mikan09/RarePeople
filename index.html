@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>こんな人、日本に何人いるの？</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script src="https://cdn.jsdelivr.net/npm/vue@3"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen p-6">
+  <div id="app" class="max-w-lg mx-auto bg-white p-6 rounded shadow">
+    <h1 class="text-2xl font-bold mb-4">こんな人、日本に何人いるの？</h1>
+
+    <!-- フォーム入力部分 -->
+    <div class="space-y-4">
+      <!-- 性別選択 -->
+      <div>
+        <label class="block font-medium">性別</label>
+        <select v-model="form.gender" class="mt-1 w-full border rounded px-2 py-1">
+          <option value="男性">男性</option>
+          <option value="女性">女性</option>
+          <option value="気にしない">気にしない</option>
+        </select>
+      </div>
+
+      <!-- 年齢選択 -->
+      <div>
+        <label class="block font-medium">年齢（歳）</label>
+        <div class="flex space-x-2">
+          <input type="number" v-model.number="form.ageMin" min="18" max="100" class="w-1/2 border rounded px-2 py-1" placeholder="最小" />
+          <input type="number" v-model.number="form.ageMax" min="18" max="100" class="w-1/2 border rounded px-2 py-1" placeholder="最大" />
+        </div>
+      </div>
+
+      <!-- 年収選択 -->
+      <div>
+        <label class="block font-medium">年収（万円）</label>
+        <div class="flex space-x-2">
+          <select v-model="form.incomeMin" class="w-1/2 border rounded px-2 py-1">
+            <option v-for="value in [0, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1200]" :key="value" :value="value">
+              {{ value }}万円
+            </option>
+          </select>
+          <select v-model="form.incomeMax" class="w-1/2 border rounded px-2 py-1">
+            <option v-for="value in [0, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1200]" :key="value" :value="value">
+              {{ value }}万円
+            </option>
+          </select>
+        </div>
+      </div>
+
+      
+
+      <!-- 外見選択 -->
+      <div>
+        <label class="block font-medium">外見（9段階-均等割合-）</label>
+        <div class="flex space-x-2">
+          <select v-model="form.appearanceMin" class="w-1/2 border rounded px-2 py-1">
+            <option v-for="scale in stats?.appearance_scale ? Object.keys(stats.appearance_scale) : ['上の上', '上の中', '上の下', '中の上', '普通', '中の下', '下の上', '下の中', '下の下']" :key="scale" :value="scale">
+              {{ scale }}
+            </option>
+          </select>
+          <select v-model="form.appearanceMax" class="w-1/2 border rounded px-2 py-1">
+            <option v-for="scale in stats?.appearance_scale ? Object.keys(stats.appearance_scale) : ['上の上', '上の中', '上の下', '中の上', '普通', '中の下', '下の上', '下の中', '下の下']" :key="scale" :value="scale">
+              {{ scale }}
+            </option>
+          </select>
+        </div>
+      </div>
+
+      <!-- 身長選択 -->
+      <div>
+        <label class="block font-medium">身長（cm）</label>
+        <div class="flex space-x-2">
+          <select v-model="form.heightMin" class="w-1/2 border rounded px-2 py-1">
+            <option v-if="stats && stats.height_distribution" v-for="height in Object.keys(stats?.height_distribution || {}).sort((a, b) => a - b)" :key="height" :value="height">
+              {{ height }}cm
+            </option>
+            <option v-else v-for="height in ['135','140', '145', '150', '155','160','165','170', '175', '180', '185', '190', '195']" :key="height" :value="height">
+            {{ height }}cm
+            </option>
+          </select>
+          <select v-model="form.heightMax" class="w-1/2 border rounded px-2 py-1">
+            <option v-if="stats && stats.height_distribution" v-for="height in Object.keys(stats?.height_distribution || {}).sort((a, b) => a - b)" :key="height" :value="height">
+              {{ height }}cm
+            </option>
+            <option v-else v-for="height in ['135','140', '145', '150', '155','160','165','170', '175', '180', '185', '190', '195']" :key="height" :value="height">
+            {{ height }}cm
+            </option>
+          </select>
+        </div>
+      </div>
+
+      <!-- バストサイズ（女性のみ） -->
+      <div v-if="form.gender==='女性'">
+        <label class="block font-medium">バストサイズ</label>
+        <div class="flex space-x-2">
+          <select v-model="form.bustMin" class="w-1/2 border rounded px-2 py-1">
+            <option v-for="cup in ['A','B','C','D','E','F','G以上']" :key="cup" :value="cup">
+              {{ cup }}
+            </option>
+          </select>
+          <select v-model="form.bustMax" class="w-1/2 border rounded px-2 py-1">
+            <option v-for="cup in ['A','B','C','D','E','F','G以上']" :key="cup" :value="cup">
+              {{ cup }}
+            </option>
+          </select>
+        </div>
+      </div>
+
+      <!-- 学歴選択 -->
+      <div>
+        <label class="block font-medium">学歴</label>
+        <select v-model="form.education" class="mt-1 w-full border rounded px-2 py-1">
+          <option v-if="stats && stats.education_distribution" v-for="(value, key) in educationOptions" :key="key" :value="key">
+            {{ key }}
+          </option>
+          <option v-else v-for="edu in ['気にしない', '高卒以上', '大卒以上', '大学院卒以上']" :key="edu" :value="edu">
+            {{ edu }}
+          </option>
+        </select>
+      </div>
+
+      <!-- 兄弟有無（男性のみ） -->
+      <div v-if="form.gender === '男性'">
+        <label class="block font-medium">兄弟有無</label>
+        <select v-model="form.siblings" class="mt-1 w-full border rounded px-2 py-1">
+          <option v-if="stats && stats.siblings" v-for="val in stats?.siblings"  :key="val" :value="val">
+            {{ val }}
+          </option>
+          <option v-else v-for="val in [  '気にしない','長男', '長男以外' ]" :key="val" :value="val">
+            {{ val }}
+          </option>
+        </select>
+      </div>
+
+      <!-- 結婚の有無選択 -->
+      <div>
+        <label class="block font-medium">婚姻有無</label>
+        <select v-model="form.maritalStatus" class="mt-1 w-full border rounded px-2 py-1">
+          <option value="未婚">未婚</option>
+          <option value="気にしない">気にしない</option>
+        </select>
+      </div>
+
+      <!-- 結果ボタン -->
+      <button @click="calc" class="w-full bg-blue-500 text-white py-2 rounded mt-4">結果を見る</button>
+    </div>
+
+    <!-- 結果表示部分 -->
+    <div v-if="result !== null" class="mt-6 p-4 bg-green-100 rounded">
+      <p class="text-lg">条件に当てはまる人は同年齢の中で…</p>
+      <p class="text-2xl font-bold">{{ formattedResult }}</p>
+      <p class="text-sm">（約 {{ percentage }}%）</p>
+      <p class="text-sm">※この結果は統計データに基づく推定値です。</p>
+
+
+      <!-- SNS シェアボタン -->
+      <div class="mt-4 flex justify-center">
+        <a
+          :href="shareUrl('twitter')"
+          target="_blank"
+          class="flex items-center gap-2 bg-black hover:bg-gray-900 text-white px-4 py-2 rounded transition-colors duration-200 font-bold shadow"
+          style="font-family: 'Segoe UI', 'Arial', sans-serif;"
+        >
+          <!-- XロゴSVG -->
+          <svg viewBox="0 0 40 40" width="22" height="22" fill="white" aria-hidden="true">
+            <g>
+              <path d="M30.21 10.29c-.38-.38-1-.38-1.38 0l-8.83 8.83-8.83-8.83c-.38-.38-1-.38-1.38 0s-.38 1 0 1.38l8.83 8.83-8.83 8.83c-.38.38-.38 1 0 1.38.19.19.44.29.69.29s.5-.1.69-.29l8.83-8.83 8.83 8.83c.19.19.44.29.69.29s.5-.1.69-.29c.38-.38.38-1 0-1.38l-8.83-8.83 8.83-8.83c.38-.38.38-1 0-1.38z"></path>
+            </g>
+          </svg>
+          Xで共有
+        </a>
+      </div>
+    </div>
+
+    <!-- 参考データ -->
+    <div class="mt-12 text-sm text-gray-600 border-t pt-6">
+      <div class="font-bold mb-2">■参考データ</div>
+      <ul class="space-y-1">
+        <li>
+          年齢×性別人口：
+          <a href="https://www.stat.go.jp/data/jinsui/" target="_blank" class="text-blue-600 underline">
+            総務省統計局（e-Stat）「人口推計 各歳別・男女別人口（令和5年10月1日現在）」
+          </a>
+        </li>
+        <li>
+          年収：
+          <a href="https://www.mhlw.go.jp/toukei/itiran/roudou/chingin/kouzou/z2019/dl/07.pdf" target="_blank" class="text-blue-600 underline">
+            令和元年賃金構造基本統計調査 結果の概況 第7表 2-1、2-2 | 厚生労働省
+          </a>
+        </li>
+        <li>
+          身長：
+          <a href="https://www.e-stat.go.jp/stat-search/files?page=1&layout=datalist&toukei=00450171&tstat=000001041744&cycle=7&tclass1=000001228532&stat_infid=000040275973&tclass2val=0" target="_blank" class="text-blue-600 underline">
+            国民健康・栄養調査 / 令和５年国民健康・栄養調査
+          </a>
+        </li>
+        <li>
+          最終学歴：
+          <a href="https://www.e-stat.go.jp/stat-search/files?page=1&stat_infid=000032201217" target="_blank" class="text-blue-600 underline">
+            国勢調査 / 令和２年国勢調査 / 就業状態等基本集計　（主な内容：労働力状態，就業者の産業･職業，教育など）
+          </a>
+        </li>
+        <li>
+          兄弟有無：
+          <a href="https://hourai-gensou.com/other/chounan-proportion/" target="_blank" class="text-blue-600 underline">
+            https://hourai-gensou.com/other/chounan-proportion/
+          </a>
+        </li>
+        <li>
+          婚姻有無：
+          <a href="https://www.gender.go.jp/kaigi/kento/Marriage-Family/8th/pdf/1.pdf" target="_blank" class="text-blue-600 underline">
+            https://www.gender.go.jp/kaigi/kento/Marriage-Family/8th/pdf/1.pdf
+          </a>
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Vueスクリプト部分 -->
+  <script>
+    // ページロード時に JSON を読み込み
+    let stats = null;
+    fetch('data/statistics.json')
+      .then(res => res.json())
+      .then(data => {
+        stats = data;
+      });
+
+
+    function getAgeBand(age) {
+      const bands = [
+        [18, 19, "18-19"],
+        [20, 24, "20-24"],
+        [25, 29, "25-29"],
+        [30, 34, "30-34"],
+        [35, 39, "35-39"],
+        [40, 44, "40-44"],
+        [45, 49, "45-49"],
+        [50, 54, "50-54"],
+        [55, 59, "55-59"],
+        [60, 64, "60-64"],
+        [65, 69, "65-69"],
+        [70, 100, "70-100"]
+      ];
+      // 年齢範囲に基づいてバンドをフィルタリング
+      return bands.filter(([min, max]) => min <= age && max >= age ).map(([, , label]) => label);
+    }
+
+    function estimatePeopleCount(
+      gender,
+      ageMin,
+      ageMax,
+      incomeMin,
+      incomeMax,
+      education,
+      maritalStatus,
+      heightMin,
+      heightMax,
+      appearanceMin,
+      appearanceMax,
+      siblings,
+      bustMin,
+      bustMax
+    ) {
+      if (!stats || !stats.income_distribution || !stats.income_distribution[gender] || !stats.population) return 0;
+    
+      let total = 0;
+    
+      // 年齢バンドごとに人口をまとめる
+      const bands = [
+        [18, 19, "18-19"],
+        [20, 24, "20-24"],
+        [25, 29, "25-29"],
+        [30, 34, "30-34"],
+        [35, 39, "35-39"],
+        [40, 44, "40-44"],
+        [45, 49, "45-49"],
+        [50, 54, "50-54"],
+        [55, 59, "55-59"],
+        [60, 64, "60-64"],
+        [65, 69, "65-69"],
+        [70, 100, "70-100"]
+      ];
+    
+      for (const [minAge, maxAge, band] of bands) {
+        if (maxAge < ageMin || minAge > ageMax) continue;
+    
+        // このバンドに該当する年齢の人口合計
+        const ageKeys = Object.keys(stats.population[gender])
+          .map(Number)
+          .filter(age => age >= Math.max(minAge, ageMin) && age <= Math.min(maxAge, ageMax));
+        const bandPopulation = ageKeys.reduce((sum, age) => sum + stats.population[gender][age], 0);
+        if (bandPopulation === 0) continue;
+    
+        // 年収分布
+        const dist = stats.income_distribution[gender][band];
+        if (!dist) continue;
+    
+        for (const range in dist) {
+          const [incMin, incMax] = range.split("-").map(Number);
+          if (incMax < incomeMin || incMin > incomeMax) continue;
+    
+          const overlapRatio = dist[range];
+    
+          // 学歴分布
+          let educationFactor = 1.0;
+          if (education && stats.education_distribution && stats.education_distribution[gender]) {
+            const bandData = stats.education_distribution[gender][band];
+            if (bandData && bandData[education]) {
+              educationFactor = bandData[education];
+            }
+          }
+    
+          // 結婚の有無
+          let maritalFactor = 1.0;
+          if (maritalStatus && stats.marital_status && stats.marital_status[gender]) {
+            const maritalData = stats.marital_status[gender][band];
+            if (maritalData && maritalData[maritalStatus]) {
+              maritalFactor = maritalData[maritalStatus];
+            }
+          }
+    
+          total += bandPopulation * overlapRatio * educationFactor * maritalFactor;
+        }
+      }
+    
+      // 身長分布
+      if (heightMin && heightMax) {
+        const genderHeightDistribution = stats.height_distribution[gender];
+        if (genderHeightDistribution) {
+          const heightKeys = Object.keys(genderHeightDistribution).sort((a, b) => Number(a.replace('cm', '')) - Number(b.replace('cm', '')));
+          let minIndex = heightKeys.indexOf(heightMin + 'cm');
+          let maxIndex = heightKeys.indexOf(heightMax + 'cm');
+          if (minIndex === -1) minIndex = 0;
+          if (maxIndex === -1) maxIndex = heightKeys.length - 1;
+          if (minIndex > maxIndex) [minIndex, maxIndex] = [maxIndex, minIndex];
+          const selectedHeights = heightKeys.slice(minIndex, maxIndex + 1);
+          const heightFactor = selectedHeights.reduce((sum, height) => sum + genderHeightDistribution[height], 0) || 0;
+          total *= heightFactor;
+        }
+      }
+    
+      // 外見分布
+      if (appearanceMin && appearanceMax && stats.appearance_scale) {
+        const appearanceKeys = Object.keys(stats.appearance_scale);
+        const minIndex = appearanceKeys.indexOf(appearanceMin);
+        const maxIndex = appearanceKeys.indexOf(appearanceMax);
+        if (minIndex !== -1 && maxIndex !== -1) {
+          const selectedAppearances = appearanceKeys.slice(
+            Math.min(minIndex, maxIndex),
+            Math.max(minIndex, maxIndex) + 1
+          );
+          const appearanceFactor = selectedAppearances.reduce(
+            (sum, appearance) => sum + stats.appearance_scale[appearance],
+            0
+          );
+          total *= appearanceFactor || 1.0;
+        }
+      }
+    
+      // 兄弟有無（男性のみ）
+      if (gender === '男性' && siblings && stats.siblings) {
+        const siblingsFactor = stats.siblings[siblings] || 1.0;
+        total *= siblingsFactor;
+      }
+    
+      // バストサイズ（女性のみ）
+      if (gender === '女性' && bustMin && bustMax && stats.bust_distribution) {
+        const bustKeys = Object.keys(stats.bust_distribution);
+        const minIndex = bustKeys.indexOf(bustMin);
+        const maxIndex = bustKeys.indexOf(bustMax);
+        if (minIndex !== -1 && maxIndex !== -1) {
+          const selectedBusts = bustKeys.slice(
+            Math.min(minIndex, maxIndex),
+            Math.max(minIndex, maxIndex) + 1
+          );
+          const bustFactor = selectedBusts.reduce(
+            (sum, bust) => sum + stats.bust_distribution[bust],
+            0
+          );
+          total *= bustFactor || 1.0;
+        }
+      }
+    
+      return Math.round(total);
+    }
+    
+
+    Vue.createApp({
+      data() {
+        return {
+          form: {
+            gender: '男性',
+            incomeMin: 400,
+            incomeMax: 1200,
+            ageMin: 25,
+            ageMax: 30,
+            bustMin: 'A',
+            bustMax: 'G以上',
+            appearanceMin: '下の下',
+            appearanceMax: '上の上',
+            education: '気にしない',
+            heightMin: '165',
+            heightMax: '185',
+            siblings: '気にしない',
+            maritalStatus: '気にしない' // 結婚の有無
+          },
+          result: null,
+          totalPopulation: 0
+        };
+      },
+      computed: {
+        educationOptions() {
+          if (!stats || !stats.education_distribution) {
+            // デフォルト値を返す
+            return {
+              "気にしない": 1.0,
+              "高卒以上": 0.8,
+              "大卒以上": 0.6,
+              "大学院卒以上": 0.4
+            };
+          }
+      
+          const gender = this.form.gender === '気にしない' ? '男性' : this.form.gender; // デフォルトは男性
+          const ageBands = getAgeBand(this.form.ageMin); // 年齢階層を取得
+          let distribution = {};
+      
+          ageBands.forEach(band => {
+            const bandData = stats.education_distribution[gender][band];
+            if (bandData) {
+              Object.keys(bandData).forEach(key => {
+                distribution[key] = (distribution[key] || 0) + bandData[key];
+              });
+            }
+          });
+      
+          return distribution;
+        },
+        formattedResult() {
+          return this.result.toLocaleString() + "人 / " + this.totalPopulation.toLocaleString() + "人";
+        },
+        percentage() {
+          return ((this.result / this.totalPopulation) * 100).toFixed(2);
+        },
+        totalPopulation() {
+          if (!stats || !stats.population) return 0;
+
+          const genders = this.form.gender === '気にしない' ? ['男性', '女性'] : [this.form.gender];
+          return genders.reduce((total, gender) => {
+            const ageKeys = Object.keys(stats.population[gender]).filter(age => age >= this.form.ageMin && age <= this.form.ageMax);
+            return total + ageKeys.reduce((sum, age) => sum + stats.population[gender][age], 0);
+          }, 0);
+        }
+      },
+      methods: {
+        async calc() {
+          if (!stats) return;
+
+          let pop = 0;
+          const genders = this.form.gender === '気にしない' ? ['男性', '女性'] : [this.form.gender];
+
+          genders.forEach(gender => {
+            // 年齢・年収・学歴・身長範囲内の人口を取得
+            let estimatePeople = estimatePeopleCount(
+              gender,
+              this.form.ageMin,
+              this.form.ageMax,
+              this.form.incomeMin,
+              this.form.incomeMax,
+              this.form.education,
+              this.form.maritalStatus,
+              this.form.heightMin,
+              this.form.heightMax,
+              this.form.appearanceMin,
+              this.form.appearanceMax,
+              this.form.siblings,
+              this.form.bustMin,
+              this.form.bustMax
+            );
+
+            pop += estimatePeople;
+          });
+
+          // totalPopulationをここで更新
+          this.totalPopulation = genders.reduce((total, gender) => {
+            const ageKeys = Object.keys(stats.population[gender]).filter(age => age >= this.form.ageMin && age <= this.form.ageMax);
+            return total + ageKeys.reduce((sum, age) => sum + stats.population[gender][age], 0);
+          }, 0);
+
+          this.result = Math.floor(pop);
+        },
+        shareUrl(type) {
+          // 条件文生成
+          const cond = [
+            `性別:${this.form.gender}`,
+            `年齢:${this.form.ageMin}～${this.form.ageMax}歳`,
+            `年収:${this.form.incomeMin}～${this.form.incomeMax}万円`,
+            `外見:${this.form.appearanceMin}～${this.form.appearanceMax}`,
+            `身長:${this.form.heightMin}～${this.form.heightMax}cm`,
+            this.form.gender === '女性' ? `バスト:${this.form.bustMin}～${this.form.bustMax}` : null,
+            `学歴:${this.form.education}`,
+            this.form.gender === '男性' ? `兄弟有無:${this.form.siblings}` : null,
+            `婚姻有無:${this.form.maritalStatus}`
+          ].filter(Boolean).join('/');
+        
+          const txt = encodeURIComponent(
+            `『こんな人、日本に何人いる？』\n【条件】${cond}\n${this.formattedResult}(約${this.percentage}%)でした！`
+          );
+          const url = encodeURIComponent(location.href);
+          if (type === 'twitter') {
+            return `https://twitter.com/intent/tweet?text=${txt}&url=${url}`;
+          }
+          return '#';
+        }
+      },
+      mounted() {
+        fetch('data/statistics.json')
+          .then(res => res.json())
+          .then(data => {
+            stats = data;
+          });
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
